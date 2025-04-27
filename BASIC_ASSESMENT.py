@@ -50,6 +50,8 @@ key = os.getenv("SUPABASE_KEY")
 # Initialize Flipside API globally
 try:
     FLIPSIDE_API_KEY = os.getenv("FLIPSIDE_API_KEY")
+    if not FLIPSIDE_API_KEY:
+        raise ValueError("FLIPSIDE_API_KEY is not set in environment variables")
     flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
     print("Flipside API initialized successfully")
 except Exception as e:
@@ -68,7 +70,6 @@ try:
     # File path configuration
     file_path = "C:\\Users\\Oscar\\CascadeProjects\\assesments"
     os.chdir(file_path)
-    dotenv.load_dotenv(".env")
    
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
@@ -510,8 +511,6 @@ def get_token_transfers(address_searched, blockchain_selected):
     except Exception as e:
         st.error(f"Error fetching token transfers: {str(e)}")
         return pd.DataFrame()  # Return empty DataFrame on error
-
-
 
 
 # Function to analyze token transfers data including suspicious activity
@@ -1336,4 +1335,3 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
-
