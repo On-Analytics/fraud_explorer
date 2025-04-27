@@ -40,14 +40,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
-
-
-# Supabase configurationlets
+# Load environment variables
 dotenv.load_dotenv(".env")
+
+# Supabase configuration
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 
+# Initialize Flipside API globally
+try:
+    FLIPSIDE_API_KEY = os.getenv("FLIPSIDE_API_KEY")
+    flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
+    print("Flipside API initialized successfully")
+except Exception as e:
+    print(f"Failed to initialize Flipside API: {str(e)}")
+    flipside = None
 
 try:
     supabase = create_client(url, key)
@@ -55,6 +62,7 @@ try:
 except Exception as e:
     print(f"Failed to create Supabase client: {str(e)}")
     supabase = None
+
 # Set up file paths
 try:
     # File path configuration
@@ -65,10 +73,6 @@ try:
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
    
-    # Initialize Flipside API
-    FLIPSIDE_API_KEY = os.getenv("FLIPSIDE_API_KEY")
-    flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
-
     @st.cache_data(ttl=3600, show_spinner=False)
     def load_suspicious_tokens_by_blockchain(blockchain):
         try:
@@ -439,6 +443,9 @@ with right_col:
 @st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_token_transfers(address_searched, blockchain_selected):
     try:
+        if flipside is None:
+            raise Exception("Flipside API client is not initialized")
+            
         # Format address for SQL query and convert to lowercase
         formatted_address = f"'{address_searched.lower()}'"
         
