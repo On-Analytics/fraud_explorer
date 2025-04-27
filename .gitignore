@@ -1,0 +1,19 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore environment and secret files
+.env
+search_history.pkl
+
+# Ignore data files (add/remove as needed)
+*.csv
+
+# VSCode workspace settings (optional)
+*.code-workspace
+
+# MacOS system files (optional)
+.DS_Store 
