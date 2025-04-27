@@ -1,4 +1,6 @@
-streamlit
-pandas
-python-dotenv
-supabase
+streamlit==1.32.0
+pandas==2.1.4
+python-dotenv==1.0.0
+flipside==0.1.0
+supabase==2.3.0
+plotly==5.18.0
