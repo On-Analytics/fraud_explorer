@@ -63,7 +63,7 @@ except Exception as e:
     supabase = None
 
 # Set up file paths
-try:
+try:    
     # File path configuration
     file_path = "C:\\Users\\Oscar\\CascadeProjects\\assesments"
     os.chdir(file_path)
@@ -71,7 +71,10 @@ try:
    
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
-   
+except Exception as e:
+    print(f"Error setting up file paths: {str(e)}")
+    search_history_path = None
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_suspicious_tokens_by_blockchain(blockchain):
     try:
