@@ -41,24 +41,31 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Load environment variables
-dotenv.load_dotenv(".env")
-
-# Supabase configuration
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
-
-# Initialize Flipside API globally
 try:
+    # Try to load from .env file first
+    dotenv.load_dotenv(".env")
+    
+    # If not found in .env, try to load from system environment variables
     FLIPSIDE_API_KEY = os.getenv("FLIPSIDE_API_KEY")
     if not FLIPSIDE_API_KEY:
-        raise ValueError("FLIPSIDE_API_KEY is not set in environment variables")
+        raise ValueError("FLIPSIDE_API_KEY is not set")
+    
+    # Initialize Flipside API
     flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
     print("Flipside API initialized successfully")
+    
 except Exception as e:
     print(f"Failed to initialize Flipside API: {str(e)}")
     flipside = None
 
+# Initialize Supabase
 try:
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    
+    if not url or not key:
+        raise ValueError("Supabase credentials not set")
+    
     supabase = create_client(url, key)
     print("Supabase client created successfully")
 except Exception as e:
