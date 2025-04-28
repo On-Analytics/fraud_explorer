@@ -1,6 +1,6 @@
 flipside==2.1.0
 plotly==5.18.0
 requests==2.32.0
-supabase-py==1.0.3
 streamlit==1.32.0
-pandas==2.2.2
+pandas
+st-supabase-connection==2.0.1

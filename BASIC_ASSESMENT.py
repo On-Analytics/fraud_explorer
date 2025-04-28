@@ -6,7 +6,7 @@ import dotenv
 from flipside import Flipside
 import json
 import pickle  # For saving/loading search history
-from supabase import create_client
+from supabase import create_client, Client
 from typing import List, Dict, Any
 
 # Cookie management functions
@@ -41,8 +41,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Assigning variables
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+@st.cache_resource
+def init_connection():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        client = create_client(url, key)
+        print("Supabase client created successfully")
+        return client
+    except Exception as e:
+        st.error(f"Failed to create Supabase client: {str(e)}")
+        print(f"Failed to create Supabase client: {str(e)}")
+        return None
+
+supabase = init_connection()
+
 FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
 FLIPSIDE_URL = st.secrets["FLIPSIDE_URL"]
 
@@ -53,16 +66,6 @@ try:
 except Exception as e:
     print(f"Failed to initialize Flipside API: {str(e)}")
     flipside = None
-
-# Initialize Supabase
-# Initialize Supabase
-try:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("Supabase client created successfully")
-except Exception as e:
-    st.error(f"Failed to create Supabase client: {str(e)}")
-    print(f"Failed to create Supabase client: {str(e)}")
-    supabase = None
 
 # Set up file paths
 try:    
