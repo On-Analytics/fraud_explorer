@@ -8,6 +8,7 @@ import json
 import pickle  # For saving/loading search history
 from supabase import create_client, Client
 from typing import List, Dict, Any
+import random
 
 # Cookie management functions
 def get_cookie(name: str, default: Any = None) -> Any:
@@ -56,17 +57,20 @@ def init_connection():
 
 supabase = init_connection()
 
-FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
-FLIPSIDE_URL = st.secrets["FLIPSIDE_URL"]
+@st.cache_resource
+def init_flipside_connection():
+    try:
+        api_key = st.secrets["FLIPSIDE_API_KEY"]
+        api_url = st.secrets["FLIPSIDE_URL"]
+        client = Flipside(api_key, api_url)
+        print("Flipside API initialized successfully")
+        return client
+    except Exception as e:
+        st.error(f"Failed to initialize Flipside API: {str(e)}")
+        print(f"Failed to initialize Flipside API: {str(e)}")
+        return None
 
-# Initialize Flipside
-try:
-    flipside = Flipside(FLIPSIDE_API_KEY, FLIPSIDE_URL)
-    print("Flipside API initialized successfully")
-except Exception as e:
-    print(f"Failed to initialize Flipside API: {str(e)}")
-    flipside = None
-
+flipside = init_flipside_connection()
 # Set up file paths
 try:    
     # File path configuration
@@ -393,7 +397,7 @@ st.markdown("""
 
 # Application title and description
 st.markdown("<h1 class='main-header'>Fraud Explorer</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; margin-bottom: 2rem;'>Run a Fraud Diagnostic on any Address</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; margin-bottom: 2rem;'>Try Once - Run a Fraud Diagnostic on any Address</p>", unsafe_allow_html=True)
 
 
 # Create columns for the main controls and search history
@@ -509,8 +513,6 @@ def get_token_transfers(address_searched, blockchain_selected):
         return pd.DataFrame()  # Return empty DataFrame on error
 
 
-
-
 # Function to analyze token transfers data including suspicious activity
 def analyze_transfers_data(transfers_df):
     if transfers_df.empty:
@@ -604,7 +606,7 @@ def analyze_transfers_data(transfers_df):
                 "type": row['type'],
                 "contract_address": str(row['contract_address']),  # Full, no shortening
                 "symbol": row['symbol'] if pd.notna(row['symbol']) else "Unknown",
-                "counterparty": str(row['target']) if pd.notna(row['target']) else "Unknown",  # Full, no shortening
+                "target": str(row['target']) if pd.notna(row['target']) else "Unknown",  # Full, no shortening
                 "time": row['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
                 "suspicious": is_suspicious,
                 "safe": is_safe,
@@ -695,15 +697,15 @@ def get_mock_data():
         "tx_hash": [
             # ETH token (Phishing)
             "0x1234...a1", "0x1234...a2", "0x1234...a3",
-            # SCAM token (Fake_Native)
+            # SCAM token (Fake Native)
             "0x7890...b1", "0x7890...b2",
-            # FAKE token (Fake_Stablecoin)
+            # FAKE token (Fake Stablecoin)
             "0x3456...c1", "0x3456...c2",
-            # BUSD token (Fake_Native)
+            # BUSD token (Fake Native)
             "0x2222...d1",
             # MATIC token (Phishing)
             "0x3333...e1", "0x3333...e2",
-            # ARBSCAM token (Fake_Stablecoin)
+            # ARBSCAM token (Fake Stablecoin)
             "0x4444...f1"
         ],
         "block_timestamp": pd.to_datetime([
@@ -789,20 +791,20 @@ def get_mock_data():
             "transfer_in"
         ],
         "tag": [
-            "High_Risk", "High_Risk", "High_Risk",
-            "High_Risk", "High_Risk",
-            "High_Risk", "High_Risk",
-            "High_Risk",
+            "High Risk", "High Risk", "High Risk",
+            "High Risk", "High Risk",
+            "High Risk", "High Risk",
+            "High Risk",
             "Phishing", "Phishing",
             "Fake"
         ],
         "tag_1": [
             "Phishing", "Phishing", "Phishing",         # ETH
-            "Fake_Native", "Fake_Native",               # SCAM
-            "Fake_Stablecoin", "Fake_Stablecoin",       # FAKE
-            "Fake_Native",                              # BUSD
+            "Fake Native", "Fake Native",               # SCAM
+            "Fake Stablecoin", "Fake Stablecoin",       # FAKE
+            "Fake Native",                              # BUSD
             "Phishing", "Phishing",                     # MATIC
-            "Fake_Stablecoin"                           # ARBSCAM
+            "Fake Stablecoin"                           # ARBSCAM
         ]
     })
 
@@ -881,12 +883,29 @@ def get_mock_data():
         "activity_timeline": activity_timeline,
         "tokens_timeline": tokens_timeline,
         "recent_transfers": [
-            {"tx_hash": f"0x{i}234...abcd", "type": "transfer_in", "contract_address": f"0xc{i}23...4567", 
-             "symbol": "ETH", "counterparty": f"0xdef{i}...5678", 
-             "time": (datetime.now() - timedelta(hours=i)).strftime('%Y-%m-%d %H:%M:%S'),
-             "suspicious": i % 3 == 0, "safe": i % 3 == 1, 
-             "tag": "High_Risk" if i % 3 == 0 else ("Safe" if i % 3 == 1 else None),
-             "tag_1": "Phishing" if i % 3 == 0 else ("Fake_Stablecoin" if i % 3 == 1 else "No Detail")}
+            (
+                lambda tag, tx_hash, contract_address, target, time: {
+                    "tx_hash": tx_hash,
+                    "type": "transfer_in",
+                    "contract_address": contract_address,
+                    "symbol": "ETH",
+                    "target": target,
+                    "time": time,
+                    "suspicious": tag == "High Risk",
+                    "safe": tag == "Safe",
+                    "tag": tag,
+                    "tag_1": (
+                        random.choice(["Phishing", "Fake Native", "Fake Stablecoin"]) if tag == "High Risk" else "No Detail"
+                    )
+                }
+            )(
+                # tag assignment logic
+                ("High Risk" if i % 3 == 0 else ("Safe" if i % 3 == 1 else "Caution")),
+                f"0x{i}234...abcd",
+                f"0xc{i}23...4567",
+                f"0xdef{i}...5678",
+                (datetime.now() - timedelta(hours=i)).strftime('%Y-%m-%d %H:%M:%S')
+            )
             for i in range(20)  # Create 20 mock transfers for testing
         ],
         "suspicious_transfers": mock_suspicious_transfers,
@@ -1047,8 +1066,8 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         with chart_col:
             # --- Plotly Interactive Horizontal Stacked Bar Chart with Custom Palette ---
             import plotly.graph_objects as go
-            # Custom palette: #102E50, #BE3D2A (repeat if more tags)
-            palette = ['#102E50', '#BE3D2A']
+            # Custom palette: #102E50, #BE3D2A, #F5C45E
+            palette = ['#102E50', '#BE3D2A', '#F5C45E']
             fig = go.Figure()
             for i, row in tag_df.iterrows():
                 fig.add_trace(go.Bar(
@@ -1205,7 +1224,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
     header_cols[1].write("**Type**")
     header_cols[2].write("**Contract Address**")
     header_cols[3].write("**Symbol**")
-    header_cols[4].write("**Counterparty**")
+    header_cols[4].write("**Target**")
     header_cols[5].write("**Time**")
     header_cols[6].write("**Status**")
     header_cols[7].write("**Detail**")
@@ -1218,7 +1237,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         cols[1].write(row["type"])
         cols[2].write(row["contract_address"])
         cols[3].write(row["symbol"])
-        cols[4].write(row["counterparty"])
+        cols[4].write(row["target"])
         cols[5].write(row["time"])
         
         # Status badge style
@@ -1233,7 +1252,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
 
         # Detail badge style
         detail = row.get("tag_1", "No Detail")
-        detail_color = "#b71c1c" if detail in ["Phishing", "Fake_Native", "Fake_Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
+        detail_color = "#b71c1c" if detail in ["Phishing", "Fake Native", "Fake Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
         detail_html = f"""
             <span style='background-color: {detail_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
                 {detail.title() if detail else 'No Detail'}
@@ -1308,7 +1327,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
             
             # Style the Detail column
             detail = row.get("tag_1", "No Detail")
-            detail_color = "#b71c1c" if detail in ["Phishing", "Fake_Native", "Fake_Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
+            detail_color = "#b71c1c" if detail in ["Phishing", "Fake Native", "Fake Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
             detail_html = f"""
                 <span style='background-color: {detail_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
                     {detail.title() if detail else 'No Detail'}
