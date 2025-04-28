@@ -1,7 +1,6 @@
-streamlit==1.32.0
-pandas==2.1.4
-python-dotenv==1.0.0
 flipside==2.1.0
-supabase==2.3.0
 plotly==5.18.0
 requests==2.32.0
+supabase-py==1.0.3
+streamlit==1.32.0
+pandas==2.2.2
