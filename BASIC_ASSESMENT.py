@@ -2,59 +2,13 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import dotenv
 from flipside import Flipside
 import json
-<<<<<<< HEAD
-import pickle
-from supabase import create_client
-from typing import List, Dict, Any
-
-def identify_suspicious_transfers(transfers_df):
-    if not transfers_df.empty:
-        try:
-            # Get the blockchain from the transfers data
-            blockchain = transfers_df['blockchain'].iloc[0]
-            
-            # Load suspicious tokens for this specific blockchain
-            suspicious_tokens = load_suspicious_tokens_by_blockchain(blockchain)
-            
-            if not suspicious_tokens.empty:
-                # Ensure lowercase contract addresses for consistent matching
-                transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
-                suspicious_tokens['contract_address'] = suspicious_tokens['contract_address'].str.lower()
-                
-                # Merge transfers with suspicious tokens directory
-                suspicious_transfers = pd.merge(
-                    transfers_df,
-                    suspicious_tokens,
-                    on=['contract_address'],
-                    how='inner'
-                )
-                
-                return suspicious_transfers
-            else:
-                print(f"No suspicious tokens found for blockchain {blockchain}")
-                return pd.DataFrame()
-            
-        except Exception as e:
-            st.error(f"Error in identify_suspicious_transfers: {str(e)}")
-            return pd.DataFrame()
-    
-    return pd.DataFrame()
-
-# Page configuration
-st.set_page_config(
-    page_title="Fraud Explorer",
-    page_icon="🔍",
-    layout="wide"
-)
-
-=======
 import pickle  # For saving/loading search history
 from supabase import create_client
 from typing import List, Dict, Any
 
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
 # Cookie management functions
 def get_cookie(name: str, default: Any = None) -> Any:
     """Get a cookie value by name."""
@@ -71,15 +25,12 @@ def delete_cookie(name: str) -> None:
     if name in st.session_state:
         del st.session_state[name]
 
-<<<<<<< HEAD
-=======
 # Page configuration
 st.set_page_config(
     page_title="Fraud Explorer",
     page_icon="🔍",
     layout="wide"
 )
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
 # Custom CSS for page title color
 st.markdown("""
     <style>
@@ -89,29 +40,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Supabase configuration
-url = st.secrets.database.SUPABASE_URL
-key = st.secrets.database.SUPABASE_KEY
+# Load environment variables
+dotenv.load_dotenv(".env")
 
-# Initialize Flipside API
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+
+# Initialize Flipside API globally
 try:
-    FLIPSIDE_API_KEY = st.secrets.api_keys.FLIPSIDE_API_KEY
-    if not FLIPSIDE_API_KEY:
-        st.error("FLIPSIDE_API_KEY is not set in secrets")
-        flipside = None
-    else:
-        # Initialize Flipside API
-<<<<<<< HEAD
-        flipside = Flipside(FLIPSIDE_API_KEY)
-=======
-        flipside = Flipside(FLIPSIDE_API_KEY, "[https://api-v2.flipsidecrypto.xyz](https://api-v2.flipsidecrypto.xyz)")
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
-        st.session_state.flipside_initialized = True
-        print("Flipside API initialized successfully")
+    FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
+    flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
+    print("Flipside API initialized successfully")
 except Exception as e:
-    st.error(f"Failed to initialize Flipside API: {str(e)}")
+    print(f"Failed to initialize Flipside API: {str(e)}")
     flipside = None
-    st.session_state.flipside_initialized = False
 
 try:
     supabase = create_client(url, key)
@@ -169,11 +111,7 @@ try:
                 
                 return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
             
-<<<<<<< HEAD
-            print(f"No suspicious tokens found for blockchain {blockchain}")  # Debug print
-=======
             print(f"No suspicious tokens found for {blockchain}")  # Debug print
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
             return pd.DataFrame()
             
         except Exception as e:
@@ -221,11 +159,7 @@ try:
                 
                 return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
             
-<<<<<<< HEAD
-            print(f"No safe tokens found for blockchain {blockchain}")  # Debug print
-=======
             print(f"No safe tokens found for {blockchain}")  # Debug print
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
             return pd.DataFrame()
             
         except Exception as e:
@@ -234,8 +168,6 @@ try:
             st.error(f"Detailed error: {traceback.format_exc()}")
             return pd.DataFrame()
 
-<<<<<<< HEAD
-=======
     # Modify the identify_suspicious_transfers function to use blockchain-specific data
     def identify_suspicious_transfers(transfers_df):
         if not transfers_df.empty:
@@ -270,7 +202,6 @@ try:
         
         return pd.DataFrame()
 
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
     def identify_safe_transfers(transfers_df):
         if not transfers_df.empty:
             try:
@@ -508,11 +439,11 @@ with right_col:
 
 
 # Function to get token transfers data using your updated SQL query
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_token_transfers(address_searched, blockchain_selected):
     try:
-        if 'flipside_initialized' not in st.session_state or not st.session_state.flipside_initialized:
-            raise Exception("Flipside API client is not initialized. Please check your API key and try again.")
+        if flipside is None:
+            raise Exception("Flipside API client is not initialized")
             
         # Format address for SQL query and convert to lowercase
         formatted_address = f"'{address_searched.lower()}'"
@@ -578,6 +509,8 @@ def get_token_transfers(address_searched, blockchain_selected):
     except Exception as e:
         st.error(f"Error fetching token transfers: {str(e)}")
         return pd.DataFrame()  # Return empty DataFrame on error
+
+
 
 
 # Function to analyze token transfers data including suspicious activity
@@ -1402,7 +1335,3 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
-<<<<<<< HEAD
-=======
-
->>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
