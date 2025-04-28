@@ -117,7 +117,6 @@ def load_suspicious_tokens_by_blockchain(blockchain):
         print(f"Error loading suspicious tokens: {str(e)}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def load_safe_tokens_by_blockchain(blockchain):
     try:
         # First check if supabase client is available
@@ -436,7 +435,6 @@ with right_col:
 
 
 # Function to get token transfers data using your updated SQL query
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_token_transfers(address_searched, blockchain_selected):
     try:
         if flipside is None:
