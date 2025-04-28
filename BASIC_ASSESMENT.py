@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import os
-import dotenv
 from flipside import Flipside
 import json
 import pickle  # For saving/loading search history
@@ -40,32 +39,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load environment variables
-try:
-    # Try to load from .env file first
-    dotenv.load_dotenv(".env")
-    
-    # If not found in .env, try to load from system environment variables
-    FLIPSIDE_API_KEY = os.getenv("FLIPSIDE_API_KEY")
-    if not FLIPSIDE_API_KEY:
-        raise ValueError("FLIPSIDE_API_KEY is not set")
-    
-    # Initialize Flipside API
-    flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
-    print("Flipside API initialized successfully")
-    
-except Exception as e:
-    print(f"Failed to initialize Flipside API: {str(e)}")
-    flipside = None
+# Supabase configuration
+url = st.secrets.database.SUPABASE_URL
+key = st.secrets.database.SUPABASE_KEY
 
-# Initialize Supabase
+# Initialize Flipside API
 try:
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
-    
-    if not url or not key:
-        raise ValueError("Supabase credentials not set")
-    
+    FLIPSIDE_API_KEY = st.secrets.api_keys.FLIPSIDE_API_KEY
+    if not FLIPSIDE_API_KEY:
+        st.error("FLIPSIDE_API_KEY is not set in secrets")
+        flipside = None
+    else:
+        # Initialize Flipside API
+        flipside = Flipside(FLIPSIDE_API_KEY, "[https://api-v2.flipsidecrypto.xyz](https://api-v2.flipsidecrypto.xyz)")
+        st.session_state.flipside_initialized = True
+        print("Flipside API initialized successfully")
+except Exception as e:
+    st.error(f"Failed to initialize Flipside API: {str(e)}")
+    flipside = None
+    st.session_state.flipside_initialized = False
+
+try:
     supabase = create_client(url, key)
     print("Supabase client created successfully")
 except Exception as e:
@@ -77,6 +71,7 @@ try:
     # File path configuration
     file_path = "C:\\Users\\Oscar\\CascadeProjects\\assesments"
     os.chdir(file_path)
+    dotenv.load_dotenv(".env")
    
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
@@ -448,11 +443,11 @@ with right_col:
 
 
 # Function to get token transfers data using your updated SQL query
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_token_transfers(address_searched, blockchain_selected):
     try:
-        if flipside is None:
-            raise Exception("Flipside API client is not initialized")
+        if 'flipside_initialized' not in st.session_state or not st.session_state.flipside_initialized:
+            raise Exception("Flipside API client is not initialized. Please check your API key and try again.")
             
         # Format address for SQL query and convert to lowercase
         formatted_address = f"'{address_searched.lower()}'"
@@ -1342,3 +1337,4 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
+
