@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import os
 from flipside import Flipside
 import json
+<<<<<<< HEAD
 import pickle
 from supabase import create_client
 from typing import List, Dict, Any
@@ -48,6 +49,12 @@ st.set_page_config(
     layout="wide"
 )
 
+=======
+import pickle  # For saving/loading search history
+from supabase import create_client
+from typing import List, Dict, Any
+
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
 # Cookie management functions
 def get_cookie(name: str, default: Any = None) -> Any:
     """Get a cookie value by name."""
@@ -64,6 +71,15 @@ def delete_cookie(name: str) -> None:
     if name in st.session_state:
         del st.session_state[name]
 
+<<<<<<< HEAD
+=======
+# Page configuration
+st.set_page_config(
+    page_title="Fraud Explorer",
+    page_icon="🔍",
+    layout="wide"
+)
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
 # Custom CSS for page title color
 st.markdown("""
     <style>
@@ -85,7 +101,11 @@ try:
         flipside = None
     else:
         # Initialize Flipside API
+<<<<<<< HEAD
         flipside = Flipside(FLIPSIDE_API_KEY)
+=======
+        flipside = Flipside(FLIPSIDE_API_KEY, "[https://api-v2.flipsidecrypto.xyz](https://api-v2.flipsidecrypto.xyz)")
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
         st.session_state.flipside_initialized = True
         print("Flipside API initialized successfully")
 except Exception as e:
@@ -149,7 +169,11 @@ try:
                 
                 return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
             
+<<<<<<< HEAD
             print(f"No suspicious tokens found for blockchain {blockchain}")  # Debug print
+=======
+            print(f"No suspicious tokens found for {blockchain}")  # Debug print
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
             return pd.DataFrame()
             
         except Exception as e:
@@ -197,7 +221,11 @@ try:
                 
                 return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
             
+<<<<<<< HEAD
             print(f"No safe tokens found for blockchain {blockchain}")  # Debug print
+=======
+            print(f"No safe tokens found for {blockchain}")  # Debug print
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
             return pd.DataFrame()
             
         except Exception as e:
@@ -206,6 +234,43 @@ try:
             st.error(f"Detailed error: {traceback.format_exc()}")
             return pd.DataFrame()
 
+<<<<<<< HEAD
+=======
+    # Modify the identify_suspicious_transfers function to use blockchain-specific data
+    def identify_suspicious_transfers(transfers_df):
+        if not transfers_df.empty:
+            try:
+                # Get the blockchain from the transfers data
+                blockchain = transfers_df['blockchain'].iloc[0]
+                
+                # Load suspicious tokens for this specific blockchain
+                suspicious_tokens = load_suspicious_tokens_by_blockchain(blockchain)
+                
+                if not suspicious_tokens.empty:
+                    # Ensure lowercase contract addresses for consistent matching
+                    transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
+                    suspicious_tokens['contract_address'] = suspicious_tokens['contract_address'].str.lower()
+                    
+                    # Merge transfers with suspicious tokens directory
+                    suspicious_transfers = pd.merge(
+                        transfers_df,
+                        suspicious_tokens,
+                        on=['contract_address'],
+                        how='inner'
+                    )
+                    
+                    return suspicious_transfers
+                else:
+                    print(f"No suspicious tokens found for blockchain {blockchain}")
+                    return pd.DataFrame()
+                
+            except Exception as e:
+                st.error(f"Error in identify_suspicious_transfers: {str(e)}")
+                return pd.DataFrame()
+        
+        return pd.DataFrame()
+
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
     def identify_safe_transfers(transfers_df):
         if not transfers_df.empty:
             try:
@@ -1337,3 +1402,7 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
+<<<<<<< HEAD
+=======
+
+>>>>>>> c9dc488fbe2810e6becc888280ba7232e6b01f74
