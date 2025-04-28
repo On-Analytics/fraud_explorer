@@ -55,6 +55,7 @@ except Exception as e:
     print(f"Failed to initialize Flipside API: {str(e)}")
     flipside = None
 
+# Current code for Supabase initialization
 try:
     supabase = create_client(url, key)
     print("Supabase client created successfully")
@@ -78,6 +79,11 @@ except Exception as e:
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_suspicious_tokens_by_blockchain(blockchain):
     try:
+        # First check if supabase client is available
+        if supabase is None:
+            st.error("Supabase client is not initialized. Check your credentials.")
+            return pd.DataFrame()
+    
         all_data = []
         page_size = 1000
         current_page = 0
@@ -126,6 +132,11 @@ def load_suspicious_tokens_by_blockchain(blockchain):
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_safe_tokens_by_blockchain(blockchain):
     try:
+        # First check if supabase client is available
+        if supabase is None:
+            st.error("Supabase client is not initialized. Check your credentials.")
+            return pd.DataFrame()
+        
         all_data = []
         page_size = 1000
         current_page = 0
