@@ -40,24 +40,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load environment variables
-dotenv.load_dotenv(".env")
+# Assigning variables
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
+FLIPSIDE_URL = st.secrets["FLIPSIDE_URL"]
 
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-
-# Initialize Flipside API globally
+# Initialize Flipside
 try:
-    FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
-    flipside = Flipside(FLIPSIDE_API_KEY, "https://api-v2.flipsidecrypto.xyz")
+    flipside = Flipside(FLIPSIDE_API_KEY, FLIPSIDE_URL)
     print("Flipside API initialized successfully")
 except Exception as e:
     print(f"Failed to initialize Flipside API: {str(e)}")
     flipside = None
 
-# Current code for Supabase initialization
+# Initialize Supabase
 try:
-    supabase = create_client(url, key)
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("Supabase client created successfully")
 except Exception as e:
     print(f"Failed to create Supabase client: {str(e)}")
@@ -68,14 +67,15 @@ try:
     # File path configuration
     file_path = "C:\\Users\\Oscar\\CascadeProjects\\assesments"
     os.chdir(file_path)
-    dotenv.load_dotenv(".env")
-   
+
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
+
 except Exception as e:
     print(f"Error setting up file paths: {str(e)}")
     search_history_path = None
 
+# Load suspicious tokens by blockchain
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_suspicious_tokens_by_blockchain(blockchain):
     try:
@@ -249,7 +249,6 @@ def identify_safe_transfers(transfers_df):
         
     return pd.DataFrame()
 
-# Remove the global SUSPICIOUS_TOKENS_SLIM loading since we'll load per blockchain
 try:
     suspicious_tokens_loaded = True
 except Exception as e:
