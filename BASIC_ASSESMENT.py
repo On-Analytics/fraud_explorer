@@ -46,6 +46,12 @@ dotenv.load_dotenv(".env")
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 
+print(f"SUPABASE_URL: {url}")
+print(f"SUPABASE_KEY: {key[:8]}...")  # Only show first 8 chars for security
+
+supabase: Client = create_client(url, key)
+
+
 # Initialize Flipside API globally
 try:
     FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
