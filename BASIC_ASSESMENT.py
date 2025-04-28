@@ -48,8 +48,6 @@ FLIPSIDE_URL = st.secrets["FLIPSIDE_URL"]
 
 print("SUPABASE_URL from secrets:", SUPABASE_URL)
 print("SUPABASE_KEY from secrets exists:", bool(SUPABASE_KEY))
-print("Supabase client after creation:", supabase)
-
 # Initialize Flipside
 try:
     flipside = Flipside(FLIPSIDE_API_KEY, FLIPSIDE_URL)
