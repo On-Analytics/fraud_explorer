@@ -72,179 +72,175 @@ try:
     # Search history file path
     search_history_path = os.path.join(file_path, "search_history.pkl")
    
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def load_suspicious_tokens_by_blockchain(blockchain):
-        try:
-            all_data = []
-            page_size = 1000
-            current_page = 0
-            
-            print(f"Loading suspicious tokens for blockchain: {blockchain}")  # Debug print
-            
-            while True:
-                response = supabase.table("suspicious_tokens_directory") \
-                    .select("*") \
-                    .eq("blockchain", blockchain.lower()) \
-                    .range(current_page * page_size, (current_page + 1) * page_size - 1) \
-                    .execute()
-                
-                if not hasattr(response, "data") or not response.data:
-                    break
-                
-                all_data.extend(response.data)
-                
-                if len(response.data) < page_size:
-                    break
-                
-                current_page += 1
-            
-            if all_data:
-                df = pd.DataFrame(all_data)
-                print(f"Found {len(df)} suspicious tokens for {blockchain}")  # Debug print
-                print(f"Columns in suspicious tokens DataFrame: {df.columns.tolist()}")  # Debug print
-                
-                # Check if tag_1 column exists
-                if 'tag_1' not in df.columns:
-                    print("WARNING: 'tag_1' column not found in suspicious tokens data")
-                    # Add a default tag_1 column if it doesn't exist
-                    df['tag_1'] = 'Unknown'
-                
-                return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
-            
-            print(f"No suspicious tokens found for {blockchain}")  # Debug print
-            return pd.DataFrame()
-            
-        except Exception as e:
-            st.error(f"Error loading suspicious tokens for {blockchain}: {str(e)}")
-            import traceback
-            st.error(f"Detailed error: {traceback.format_exc()}")
-            return pd.DataFrame()
-
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def load_safe_tokens_by_blockchain(blockchain):
-        try:
-            all_data = []
-            page_size = 1000
-            current_page = 0
-            
-            print(f"Loading safe tokens for blockchain: {blockchain}")  # Debug print
-            
-            while True:
-                response = supabase.table("safe_tokens") \
-                    .select("*") \
-                    .eq("blockchain", blockchain.lower()) \
-                    .range(current_page * page_size, (current_page + 1) * page_size - 1) \
-                    .execute()
-                
-                if not hasattr(response, "data") or not response.data:
-                    break
-                
-                all_data.extend(response.data)
-                
-                if len(response.data) < page_size:
-                    break
-                
-                current_page += 1
-            
-            if all_data:
-                df = pd.DataFrame(all_data)
-                print(f"Found {len(df)} safe tokens for {blockchain}")  # Debug print
-                print(f"Columns in safe tokens DataFrame: {df.columns.tolist()}")  # Debug print
-                
-                # Check if tag_1 column exists
-                if 'tag_1' not in df.columns:
-                    print("WARNING: 'tag_1' column not found in safe tokens data")
-                    # Add a default tag_1 column if it doesn't exist
-                    df['tag_1'] = 'No Detail'
-                
-                return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
-            
-            print(f"No safe tokens found for {blockchain}")  # Debug print
-            return pd.DataFrame()
-            
-        except Exception as e:
-            st.error(f"Error loading safe tokens for {blockchain}: {str(e)}")
-            import traceback
-            st.error(f"Detailed error: {traceback.format_exc()}")
-            return pd.DataFrame()
-
-    # Modify the identify_suspicious_transfers function to use blockchain-specific data
-    def identify_suspicious_transfers(transfers_df):
-        if not transfers_df.empty:
-            try:
-                # Get the blockchain from the transfers data
-                blockchain = transfers_df['blockchain'].iloc[0]
-                
-                # Load suspicious tokens for this specific blockchain
-                suspicious_tokens = load_suspicious_tokens_by_blockchain(blockchain)
-                
-                if not suspicious_tokens.empty:
-                    # Ensure lowercase contract addresses for consistent matching
-                    transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
-                    suspicious_tokens['contract_address'] = suspicious_tokens['contract_address'].str.lower()
-                    
-                    # Merge transfers with suspicious tokens directory
-                    suspicious_transfers = pd.merge(
-                        transfers_df,
-                        suspicious_tokens,
-                        on=['contract_address'],
-                        how='inner'
-                    )
-                    
-                    return suspicious_transfers
-                else:
-                    print(f"No suspicious tokens found for blockchain {blockchain}")
-                    return pd.DataFrame()
-                
-            except Exception as e:
-                st.error(f"Error in identify_suspicious_transfers: {str(e)}")
-                return pd.DataFrame()
-        
-        return pd.DataFrame()
-
-    def identify_safe_transfers(transfers_df):
-        if not transfers_df.empty:
-            try:
-                # Get the blockchain from the transfers data
-                blockchain = transfers_df['blockchain'].iloc[0]
-                
-                # Load safe tokens for this specific blockchain
-                safe_tokens = load_safe_tokens_by_blockchain(blockchain)
-                
-                if not safe_tokens.empty:
-                    # Ensure lowercase contract addresses for consistent matching
-                    transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
-                    safe_tokens['contract_address'] = safe_tokens['contract_address'].str.lower()
-                    
-                    # Merge transfers with safe tokens directory
-                    safe_transfers = pd.merge(
-                        transfers_df,
-                        safe_tokens,
-                        on=['contract_address'],
-                        how='inner'
-                    )
-                    
-                    return safe_transfers
-                else:
-                    print(f"No safe tokens found for blockchain {blockchain}")
-                    return pd.DataFrame()
-                
-            except Exception as e:
-                st.error(f"Error in identify_safe_transfers: {str(e)}")
-                return pd.DataFrame()
-        
-        return pd.DataFrame()
-
-    # Remove the global SUSPICIOUS_TOKENS_SLIM loading since we'll load per blockchain
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_suspicious_tokens_by_blockchain(blockchain):
     try:
-        suspicious_tokens_loaded = True
+        all_data = []
+        page_size = 1000
+        current_page = 0
+        
+        print(f"Loading suspicious tokens for blockchain: {blockchain}")  # Debug print
+            
+        while True:
+            response = supabase.table("suspicious_tokens_directory") \
+                .select("*") \
+                .eq("blockchain", blockchain.lower()) \
+                .range(current_page * page_size, (current_page + 1) * page_size - 1) \
+                .execute()
+                
+            if not hasattr(response, "data") or not response.data:
+                break
+                
+            all_data.extend(response.data)
+                
+            if len(response.data) < page_size:
+                break
+                
+            current_page += 1
+            
+        if all_data:
+            df = pd.DataFrame(all_data)
+            print(f"Found {len(df)} suspicious tokens for {blockchain}")  # Debug print
+            print(f"Columns in suspicious tokens DataFrame: {df.columns.tolist()}")  # Debug print
+                
+            # Check if tag_1 column exists
+            if 'tag_1' not in df.columns:
+                print("WARNING: 'tag_1' column not found in suspicious tokens data")
+                # Add a default tag_1 column if it doesn't exist
+                df['tag_1'] = 'Unknown'
+            
+            return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
+            
+        print(f"No suspicious tokens found for {blockchain}")  # Debug print
+        return pd.DataFrame()
+            
     except Exception as e:
-        suspicious_tokens_loaded = False
-        search_history_path = None
+        st.error(f"Error loading suspicious tokens for {blockchain}: {str(e)}")
+        import traceback
+        st.error(f"Detailed error: {traceback.format_exc()}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_safe_tokens_by_blockchain(blockchain):
+    try:
+        all_data = []
+        page_size = 1000
+        current_page = 0
+            
+        print(f"Loading safe tokens for blockchain: {blockchain}")  # Debug print
+            
+        while True:
+            response = supabase.table("safe_tokens") \
+                .select("*") \
+                .eq("blockchain", blockchain.lower()) \
+                .range(current_page * page_size, (current_page + 1) * page_size - 1) \
+                .execute()
+                
+            if not hasattr(response, "data") or not response.data:
+                break
+                
+            all_data.extend(response.data)
+                
+            if len(response.data) < page_size:
+                break
+            
+            current_page += 1
+            
+        if all_data:
+            df = pd.DataFrame(all_data)
+            print(f"Found {len(df)} safe tokens for {blockchain}")  # Debug print
+            print(f"Columns in safe tokens DataFrame: {df.columns.tolist()}")  # Debug print
+                
+            # Check if tag_1 column exists
+            if 'tag_1' not in df.columns:
+                print("WARNING: 'tag_1' column not found in safe tokens data")
+                # Add a default tag_1 column if it doesn't exist
+                df['tag_1'] = 'No Detail'
+                
+            return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
+            
+        print(f"No safe tokens found for {blockchain}")  # Debug print
+        return pd.DataFrame()
+            
+    except Exception as e:
+        st.error(f"Error loading safe tokens for {blockchain}: {str(e)}")
+        import traceback
+        st.error(f"Detailed error: {traceback.format_exc()}")
+        return pd.DataFrame()
+
+# Modify the identify_suspicious_transfers function to use blockchain-specific data
+def identify_suspicious_transfers(transfers_df):
+    if not transfers_df.empty:
+        try:
+            # Get the blockchain from the transfers data
+            blockchain = transfers_df['blockchain'].iloc[0]
+                
+            # Load suspicious tokens for this specific blockchain
+            suspicious_tokens = load_suspicious_tokens_by_blockchain(blockchain)
+                
+            if not suspicious_tokens.empty:
+                # Ensure lowercase contract addresses for consistent matching
+                transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
+                suspicious_tokens['contract_address'] = suspicious_tokens['contract_address'].str.lower()
+                
+                # Merge transfers with suspicious tokens directory
+                suspicious_transfers = pd.merge(
+                    transfers_df,
+                    suspicious_tokens,
+                    on=['contract_address'],
+                    how='inner'
+                )
+                
+                return suspicious_transfers
+            else:
+                print(f"No suspicious tokens found for blockchain {blockchain}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            st.error(f"Error in identify_suspicious_transfers: {str(e)}")
+            return pd.DataFrame()
+        
+    return pd.DataFrame()
+
+def identify_safe_transfers(transfers_df):
+    if not transfers_df.empty:
+        try:
+            # Get the blockchain from the transfers data
+            blockchain = transfers_df['blockchain'].iloc[0]
+                
+            # Load safe tokens for this specific blockchain
+            safe_tokens = load_safe_tokens_by_blockchain(blockchain)
+                
+            if not safe_tokens.empty:
+                # Ensure lowercase contract addresses for consistent matching
+                transfers_df['contract_address'] = transfers_df['contract_address'].str.lower()
+                safe_tokens['contract_address'] = safe_tokens['contract_address'].str.lower()
+                
+                # Merge transfers with safe tokens directory
+                safe_transfers = pd.merge(
+                    transfers_df,
+                    safe_tokens,
+                    on=['contract_address'],
+                    how='inner'
+                )
+                
+                return safe_transfers
+            else:
+                print(f"No safe tokens found for blockchain {blockchain}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            st.error(f"Error in identify_safe_transfers: {str(e)}")
+            return pd.DataFrame()
+        
+    return pd.DataFrame()
+
+# Remove the global SUSPICIOUS_TOKENS_SLIM loading since we'll load per blockchain
+try:
+    suspicious_tokens_loaded = True
 except Exception as e:
     suspicious_tokens_loaded = False
     search_history_path = None
-
 
 # Load search history or create a new one
 def load_search_history() -> List[Dict[str, Any]]:
