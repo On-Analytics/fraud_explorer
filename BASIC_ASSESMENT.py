@@ -46,8 +46,6 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 FLIPSIDE_API_KEY = st.secrets["FLIPSIDE_API_KEY"]
 FLIPSIDE_URL = st.secrets["FLIPSIDE_URL"]
 
-print("SUPABASE_URL from secrets:", SUPABASE_URL)
-print("SUPABASE_KEY from secrets exists:", bool(SUPABASE_KEY))
 # Initialize Flipside
 try:
     flipside = Flipside(FLIPSIDE_API_KEY, FLIPSIDE_URL)
@@ -57,10 +55,12 @@ except Exception as e:
     flipside = None
 
 # Initialize Supabase
+# Initialize Supabase
 try:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("Supabase client created successfully")
 except Exception as e:
+    st.error(f"Failed to create Supabase client: {str(e)}")
     print(f"Failed to create Supabase client: {str(e)}")
     supabase = None
 
@@ -81,7 +81,6 @@ except Exception as e:
 def load_suspicious_tokens_by_blockchain(blockchain):
     try:
         # First check if supabase client is available
-        print("Supabase client in function:", supabase)
         if supabase is None:
             st.error("Supabase client is not initialized. Check your credentials.")
             return pd.DataFrame()
