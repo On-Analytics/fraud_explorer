@@ -7,6 +7,7 @@ __pycache__/
 
 # Ignore environment and secret files
 .env
+secrets.toml
 search_history.pkl
 
 # Ignore data files (add/remove as needed)
