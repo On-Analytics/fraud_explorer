@@ -9,6 +9,7 @@ import pickle  # For saving/loading search history
 from supabase import create_client, Client
 from typing import List, Dict, Any
 import random
+from st_social_media_links import SocialMediaIcons
 
 # Cookie management functions
 def get_cookie(name: str, default: Any = None) -> Any:
@@ -28,7 +29,7 @@ def delete_cookie(name: str) -> None:
 
 # Page configuration
 st.set_page_config(
-    page_title="Fraud Explorer",
+    page_title="Fraud Assessment Tool",
     page_icon="🔍",
     layout="wide"
 )
@@ -40,6 +41,13 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Social Media (main page only)
+social_media_links = [
+    "https://www.linkedin.com/in/oscarquirogap/",
+    "mailto:contact@onanalytics.co",  # Changed email
+]
+social_media_icons = SocialMediaIcons(social_media_links)
 
 # Assigning variables
 @st.cache_resource
@@ -396,7 +404,7 @@ st.markdown("""
 
 
 # Application title and description
-st.markdown("<h1 class='main-header'>Fraud Explorer</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-header'>Fraud Assessment Tool</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; margin-bottom: 2rem;'>Try Once - Run a Fraud Diagnostic on any Address</p>", unsafe_allow_html=True)
 
 
@@ -1345,10 +1353,12 @@ else:
     # Welcome message when app loads
     st.markdown("""
     <div class='info-box' style='text-align: center; padding: 2rem;'>
-        <h3>Welcome to the Blockchain Fraud Explorer</h3>
-        <p>Enter a blockchain address and select a network to begin your analysis. We will review the last 100 transfers from the past 7 days and check for any suspicious activity.</p>
+        <h3>Welcome to the Fraud Assessment Tool</h3>
+        <p>Enter a blockchain address and select a network to begin your analysis or just use the Try Example button. We will review the last 100 transfers from the past 7 days and check for any suspicious activity.</p>
         <p style='font-size: 0.8rem; margin-top: 2rem;'>
             This tool provides insights into transfers and potentially suspicious token transfers based on a known directory of suspicous contracts.
         </p>
     </div>
     """, unsafe_allow_html=True)
+    if 'address' not in st.session_state and 'blockchain' not in st.session_state:
+        social_media_icons.render()
