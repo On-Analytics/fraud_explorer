@@ -125,7 +125,25 @@ def load_suspicious_tokens_by_blockchain(blockchain):
                 print("WARNING: 'tag_1' column not found in suspicious tokens data")
                 # Add a default tag_1 column if it doesn't exist
                 df['tag_1'] = 'Unknown'
-            return df[['contract_address', 'blockchain', 'tag', 'tag_1']]
+            # Check if tag column exists
+            if 'tag' not in df.columns:
+                print("WARNING: 'tag' column not found in suspicious tokens data")
+                # Add a default tag column if it doesn't exist
+                df['tag'] = 'Unknown'
+            # Check if created_block_timestamp column exists (correct name)
+            if 'created_block_timestamp' not in df.columns:
+                print("WARNING: 'created_block_timestamp' column not found in suspicious tokens data")
+                df['created_block_timestamp'] = ''
+            # For backwards compatibility, remove any old created_blocktime_stamp column
+            if 'created_blocktime_stamp' in df.columns:
+                df = df.drop(columns=['created_blocktime_stamp'])
+            # Check if name column exists
+            if 'name' not in df.columns:
+                print("WARNING: 'name' column not found in suspicious tokens data")
+                df['name'] = ''
+            # Remove duplicate tokens based on contract_address (keep first occurrence)
+            df = df.drop_duplicates(subset=['contract_address'])
+            return df[['contract_address', 'blockchain', 'tag', 'tag_1', 'created_block_timestamp', 'name']]
         print(f"No suspicious tokens found for {blockchain}")  # Debug print
         return pd.DataFrame()
     except Exception as e:
@@ -209,7 +227,7 @@ def identify_suspicious_transfers(transfers_df):
                 
                 return suspicious_transfers
             else:
-                print(f"No suspicious tokens found for blockchain {blockchain}")
+                print(f"No high risk tokens found for blockchain {blockchain}")
                 return pd.DataFrame()
                 
         except Exception as e:
@@ -1016,7 +1034,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
             if data["summary"]["total_transfers"] > 0 else 0
         )
         st.metric(
-            "Suspicious Transfers",
+            "High Risk Transfers",
             data["summary"]["suspicious_count"],
             delta=f"{suspicious_percent:.1f}% of total",
             delta_color="inverse"  # Red for positive (bad)
@@ -1029,7 +1047,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
             if data["summary"]["unique_tokens"] > 0 else 0
         )
         st.metric(
-            "Suspicious Tokens",
+            "High Risk Tokens",
             data["summary"]["suspicious_tokens"],
             delta=f"{suspicious_tokens_percent:.1f}% of total",
             delta_color="inverse"
@@ -1039,7 +1057,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         # Add new metric for suspicious senders
         suspicious_senders = len(data["suspicious_transfers"]["address"].unique()) if not data["suspicious_transfers"].empty else 0
         st.metric(
-            "Suspicious Senders",
+            "High Risk Senders",
             suspicious_senders
         )
    
@@ -1049,7 +1067,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
     if data["summary"]["suspicious_count"] > 0:
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
         st.markdown("<div style='border-bottom: 1px solid rgba(49, 51, 63, 0.2);'></div>", unsafe_allow_html=True)
-        st.subheader("Suspicious Tokens Detected")
+        st.subheader("High Risk Tokens Detected")
         
         # Create two columns for metrics and bar chart
         metrics_col, chart_col = st.columns([1, 1])
@@ -1128,9 +1146,9 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         fig.add_trace(go.Bar(
             x=x_labels,
             y=tokens_timeline["Suspicious Tokens"],
-            name="Suspicious Tokens",
+            name="High Risk Tokens",
             marker_color=palette[1],
-            hovertemplate="Suspicious Tokens: %{y}<br>Date: %{x}<extra></extra>"
+            hovertemplate="High Risk Tokens: %{y}<br>Date: %{x}<extra></extra>"
         ))
         fig.update_layout(
             barmode='group',
@@ -1164,9 +1182,9 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         fig.add_trace(go.Bar(
             x=x_labels,
             y=activity_timeline["Suspicious Transfers"],
-            name="Suspicious Transfers",
+            name="High Risk Transfers",
             marker_color=palette[1],
-            hovertemplate="Suspicious Transfers: %{y}<br>Date: %{x}<extra></extra>"
+            hovertemplate="High Risk Transfers: %{y}<br>Date: %{x}<extra></extra>"
         ))
         fig.update_layout(
             barmode='group',
@@ -1281,12 +1299,14 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         # Create header with flexbox layout for title and pagination
         st.markdown("""
             <div class="header-container">
-                <h3 style="margin: 0;">Suspicious Tokens</h3>
+                <h3 style="margin: 0;">High Risk Tokens</h3>
             </div>
         """, unsafe_allow_html=True)
 
         # Add page selector in top right
         susp = data["suspicious_transfers"]
+        # Remove duplicate tokens based on contract_address (keep first occurrence)
+        susp = susp.drop_duplicates(subset=["contract_address"])
         tokens_per_page = 5  # Number of tokens to show per page
         total_tokens = len(susp)
         total_pages = (total_tokens + tokens_per_page - 1) // tokens_per_page
@@ -1321,7 +1341,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
             cols[0].write(row.get("contract_address", "Unknown"))
             cols[1].write(row.get("name", ""))  # Display name, blank if null/empty
             cols[2].write(row.get("symbol", "Unknown"))
-            cols[3].write(str(row.get("created_blocktime_stamp", row.get("block_timestamp", "Unknown"))))
+            cols[3].write(str(row.get("created_block_timestamp", row.get("block_timestamp", "Unknown"))))
             
             # Style the Status column
             status = row.get("tag", "Caution")
