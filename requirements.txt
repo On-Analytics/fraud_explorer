@@ -6,3 +6,6 @@ pandas
 st-supabase-connection==2.0.1
 python-dotenv==1.0.0
 st-social-media-links>=0.1.0
+web3
+python-dateutil>=2.8.2
+typing>=3.7.4
