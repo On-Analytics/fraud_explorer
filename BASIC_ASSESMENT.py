@@ -3,7 +3,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import dotenv
-from flipside import Flipside
+from web3 import Web3
+import requests
+from dateutil import parser
 import json
 import pickle  # For saving/loading search history
 from supabase import create_client, Client
@@ -65,20 +67,6 @@ def init_connection():
 
 supabase = init_connection()
 
-@st.cache_resource
-def init_flipside_connection():
-    try:
-        api_key = st.secrets["FLIPSIDE_API_KEY"]
-        api_url = st.secrets["FLIPSIDE_URL"]
-        client = Flipside(api_key, api_url)
-        print("Flipside API initialized successfully")
-        return client
-    except Exception as e:
-        st.error(f"Failed to initialize Flipside API: {str(e)}")
-        print(f"Failed to initialize Flipside API: {str(e)}")
-        return None
-
-flipside = init_flipside_connection()
 # Set up file paths
 try:    
     # File path configuration
@@ -445,7 +433,6 @@ with left_col:
                 "arbitrum": "Arbitrum (ARBI) 🔵",
                 "optimism": "Optimism (OP) 🔴",
                 "base": "Base (BASE) 🟢",
-                "avalanche": "Avalanche (AVAX) 🔺",
                 "blast": "Blast (BLAST) 💥"
             }
             blockchain = st.selectbox(
@@ -468,71 +455,114 @@ with right_col:
 
 
 # Function to get token transfers data using your updated SQL query
-def get_token_transfers(address_searched, blockchain_selected):
+def get_token_transfers(address_searched: str, blockchain: str) -> pd.DataFrame:
+    """Fetch the last 100 ERC-20 token transfers for an address using Alchemy's enhanced API."""
     try:
-        if flipside is None:
-            raise Exception("Flipside API client is not initialized")
-            
-        # Format address for SQL query and convert to lowercase
-        formatted_address = f"'{address_searched.lower()}'"
-        
-        # Updated SQL query for token transfers with 7-day filter and limit
-        sql = f"""
-        SELECT * FROM (
-            SELECT
-                tx_hash,
-                block_timestamp,
-                from_address AS address,
-                '{blockchain_selected}' AS blockchain,
-                contract_address,
-                symbol,
-                to_address AS target,
-                'transfer_in' AS type
-            FROM
-                {blockchain_selected}.core.ez_token_transfers
-            WHERE
-                to_address IN ({formatted_address})
-                AND from_address NOT IN ({formatted_address})
-                AND block_timestamp >= CURRENT_DATE - 7
-            
-            UNION
-            
-            SELECT
-                tx_hash,
-                block_timestamp,
-                to_address AS address,
-                '{blockchain_selected}' AS blockchain,
-                contract_address,
-                symbol,
-                from_address AS target,
-                'transfer_out' AS type
-            FROM
-                {blockchain_selected}.core.ez_token_transfers
-            WHERE
-                from_address IN ({formatted_address})
-                AND to_address NOT IN ({formatted_address})
-                AND block_timestamp >= CURRENT_DATE - 7
-        ) LIMIT 100
-        """
-        
-        # Execute query and process results
-        query_result_set = flipside.query(sql)
-        
-        # Convert query result to JSON format
-        result = query_result_set.model_dump_json()
-        result = json.loads(result)
-        
-        # Extract columns and rows
-        columns = result["columns"]
-        rows = result["rows"]
-        
-        # Create DataFrame from results
-        transfers_df = pd.DataFrame(rows, columns=columns)
-        
-        # Process timestamps to datetime
-        if 'block_timestamp' in transfers_df.columns and not transfers_df.empty:
-            transfers_df['block_timestamp'] = pd.to_datetime(transfers_df['block_timestamp'])
-        
+        dotenv.load_dotenv(".env")
+        ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
+        # Map blockchain to Alchemy URL
+        blockchain = blockchain.lower()
+        if blockchain == "ethereum":
+            ALCHEMY_URL = f"https://eth-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain == "polygon":
+            ALCHEMY_URL = f"https://polygon-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain == "arbitrum":
+            ALCHEMY_URL = f"https://arb-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain == "optimism":
+            ALCHEMY_URL = f"https://opt-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain == "blast":
+            ALCHEMY_URL = f"https://blast-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain == "base":
+            ALCHEMY_URL = f"https://base-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        elif blockchain in ["bsc", "binance", "binance smart chain", "binance-smart-chain"]:
+            ALCHEMY_URL = f"https://bnb-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+        else:
+            st.warning(f"Blockchain '{blockchain}' not recognized. Defaulting to Ethereum mainnet.")
+            ALCHEMY_URL = f"https://eth-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}"
+            blockchain = "ethereum"
+        web3 = Web3(Web3.HTTPProvider(ALCHEMY_URL))
+        if not web3.is_connected():
+            st.error(f"Connection to {blockchain.title()} blockchain failed!")
+            return pd.DataFrame()
+        else:
+            print(f"Connected to {blockchain.title()} blockchain")
+
+        ADDRESS = address_searched
+        seven_days_ago = int((datetime.now() - timedelta(days=7)).timestamp())
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "alchemy_getAssetTransfers",
+            "params": [
+                {
+                    "fromBlock": "0x0",
+                    "toBlock": "latest",
+                    "maxCount": "0x64",
+                    "excludeZeroValue": False,
+                    "category": ["erc20"],
+                    "fromAddress": ADDRESS,
+                    "withMetadata": True,
+                    "order": "desc"
+                }
+            ]
+        }
+        print(f"Fetching outgoing ERC-20 transfers for {ADDRESS} on {blockchain.title()}...")
+        response = requests.post(ALCHEMY_URL, json=payload)
+        outgoing_transfers = []
+        if response.status_code == 200:
+            data = response.json()
+            if "result" in data and "transfers" in data["result"]:
+                outgoing_transfers = data["result"]["transfers"]
+
+        else:
+            print(f"Error fetching outgoing transfers: {response.status_code} {response.text}")
+
+        # Now fetch incoming transfers
+        payload["params"][0].pop("fromAddress", None)
+        payload["params"][0]["toAddress"] = ADDRESS
+        print(f"Fetching incoming ERC-20 transfers for {ADDRESS} on {blockchain.title()}...")
+        response = requests.post(ALCHEMY_URL, json=payload)
+        incoming_transfers = []
+        if response.status_code == 200:
+            data = response.json()
+            if "result" in data and "transfers" in data["result"]:
+                incoming_transfers = data["result"]["transfers"]
+
+        else:
+            print(f"Error fetching incoming transfers: {response.status_code} {response.text}")
+
+        # Combine and process all transfers
+        all_transfers = outgoing_transfers + incoming_transfers
+        all_transfers.sort(key=lambda x: int(x.get("blockNum", "0x0"), 16), reverse=True)
+        processed_transfers = []
+        for tx in all_transfers:
+            block_timestamp_str = tx.get("metadata", {}).get("blockTimestamp", "")
+            if not block_timestamp_str:
+                continue
+            block_datetime = parser.isoparse(block_timestamp_str)
+            block_timestamp = int(block_datetime.timestamp())
+            if block_timestamp >= seven_days_ago:
+                processed_transfers.append({
+                    "block_number": int(tx.get("blockNum", "0x0"), 16),
+                    "timestamp": block_timestamp,
+                    "tx_hash": tx.get("hash", ""),
+                    "contract_address": tx.get("rawContract", {}).get("address", ""),
+                    "symbol": tx.get("asset", ""),
+                    "from_address": tx.get("from", ""),
+                    "to_address": tx.get("to", ""),
+                    "amount": float(tx.get("value", 0)),
+                    "block_timestamp": block_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                })
+                if len(processed_transfers) >= 100:
+                    break
+        # Add blockchain column
+        for tx in processed_transfers:
+            tx["blockchain"] = blockchain
+
+        transfers_df = pd.DataFrame(processed_transfers)
+        # DEBUG: Print a sample of from_address and to_address values
+        print("Sample from_address and to_address values:")
+        print(transfers_df[["from_address", "to_address"]].head(10))
         return transfers_df
     except Exception as e:
         st.error(f"Error fetching token transfers: {str(e)}")
@@ -576,11 +606,7 @@ def analyze_transfers_data(transfers_df):
         # Get total number of transfers
         total_transfers = len(transfers_df) #total number of transfers in protocol for the last seven days
    
-        # Get transfer counts by type
-        transfer_types = transfers_df['type'].value_counts().to_dict()
-        transfers_in = transfer_types.get('transfer_in', 0)
-        transfers_out = transfer_types.get('transfer_out', 0)
-   
+
         # Get unique tokens
         unique_tokens = transfers_df['contract_address'].nunique()
    
@@ -629,11 +655,13 @@ def analyze_transfers_data(transfers_df):
            
             recent_transfers_list.append({
                 "tx_hash": str(row['tx_hash']),  # Full, no shortening
-                "type": row['type'],
                 "contract_address": str(row['contract_address']),  # Full, no shortening
+                "from_address": row.get('from_address', ''),
+                "to_address": row.get('to_address', ''),
                 "symbol": row['symbol'] if pd.notna(row['symbol']) else "Unknown",
-                "target": str(row['target']) if pd.notna(row['target']) else "Unknown",  # Full, no shortening
-                "time": row['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
+                # Robustly handle both string and datetime for block_timestamp
+                "block_timestamp": row['block_timestamp'],
+                "time": parser.parse(row['block_timestamp']).strftime('%Y-%m-%d %H:%M:%S') if isinstance(row['block_timestamp'], str) else row['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
                 "suspicious": is_suspicious,
                 "safe": is_safe,
                 "tag": tag if tag else "Caution",
@@ -691,10 +719,10 @@ def analyze_transfers_data(transfers_df):
                 "unique_tokens": unique_tokens,
                 "suspicious_count": suspicious_count,
                 "suspicious_tokens": suspicious_tokens,
-                "suspicious_senders": len(suspicious_transfers["address"].unique()) if not suspicious_transfers.empty else 0,
+                "suspicious_senders": len(suspicious_transfers["from_address"].unique()) if not suspicious_transfers.empty else 0,
                 "safe_count": safe_count,
                 "safe_tokens": safe_tokens,
-                "safe_senders": len(safe_transfers["address"].unique()) if not safe_transfers.empty else 0,
+                "safe_senders": len(safe_transfers["from_address"].unique()) if not safe_transfers.empty else 0,
             },
             "top_tokens": top_tokens,
             "activity_timeline": activity_timeline,
@@ -734,6 +762,20 @@ def get_mock_data():
             # ARBSCAM token (Fake Stablecoin)
             "0x4444...f1"
         ],
+        "name": [
+            # ETH
+            "Ether", "Ether", "Ether",
+            # SCAM
+            "Scam Token", "Scam Token",
+            # FAKE
+            "Fake USD", "Fake USD",
+            # BUSD
+            "Fake BUSD",
+            # MATIC
+            "Fake Matic", "Fake Matic",
+            # ARBSCAM
+            "ARB Scam"
+        ],
         "block_timestamp": pd.to_datetime([
             # ETH
             "2023-11-28 14:25:16", "2023-11-27 10:15:30", "2023-11-26 08:45:22",
@@ -748,49 +790,23 @@ def get_mock_data():
             # ARBSCAM
             "2023-11-28 10:00:00"
         ]),
-        "address": [
-            # ETH
-            "0xuser...1234", "0xuser...1234", "0xuser...1234",
-            # SCAM
-            "0xuser...5678", "0xuser...5678",
-            # FAKE
-            "0xuser...abcd", "0xuser...abcd",
-            # BUSD
-            "0xuser...efgh",
-            # MATIC
-            "0xuser...ijkl", "0xuser...ijkl",
-            # ARBSCAM
-            "0xuser...mnop"
+        "created_block_timestamp": [
+            # Use the same values as block_timestamp for mock data
+            "2023-11-28 14:25:16", "2023-11-27 10:15:30", "2023-11-26 08:45:22",
+            "2023-11-28 13:00:00", "2023-11-27 11:00:00",
+            "2023-11-28 12:00:00", "2023-11-27 12:00:00",
+            "2023-11-25 15:00:00",
+            "2023-11-28 11:00:00", "2023-11-27 13:00:00",
+            "2023-11-28 10:00:00"
         ],
-        "blockchain": [
-            "ethereum", "ethereum", "ethereum",
-            "ethereum", "ethereum",
-            "ethereum", "ethereum",
-            "ethereum",
-            "ethereum", "ethereum",
-            "ethereum"
-        ],
+        "blockchain": ["ethereum"] * 11,
         "contract_address": [
-            # Each token is unique and has only one tag_1
-            "0xc123...4567",  # ETH
-            "0xc123...4567",
-            "0xc123...4567",
-            "0xc789...0123",  # SCAM
-            "0xc789...0123",
-            "0xc456...7890",  # FAKE
-            "0xc456...7890",
-            "0xc222...3333",  # BUSD
-            "0xc333...4444",  # MATIC
-            "0xc333...4444",
-            "0xc444...5555"   # ARBSCAM
-        ],
-        "name": [
-            "Fake USDT Token", "Fake USDT Token", "Fake USDT Token",
-            "Scam ETH Clone", "Scam ETH Clone",
-            "Phishing Token", "Phishing Token",
-            "Fake BUSD",
-            "Phishing MATIC", "Phishing MATIC",
-            "Arbitrum Scam"
+            "0x1234...abcd", "0x1234...abcd", "0x1234...abcd",
+            "0x7890...efgh", "0x7890...efgh",
+            "0x3456...ijkl", "0x3456...ijkl",
+            "0x2222...mnop",
+            "0x3333...qrst", "0x3333...qrst",
+            "0x4444...uvwx"
         ],
         "symbol": [
             "ETH", "ETH", "ETH",
@@ -800,50 +816,40 @@ def get_mock_data():
             "MATIC", "MATIC",
             "ARBSCAM"
         ],
-        "target": [
-            "0xdef4...5678", "0xdef4...5678", "0xdef4...5678",
-            "0xabcd...ef12", "0xabcd...ef12",
-            "0x1234...5678", "0x1234...5678",
-            "0xbbbb...cccc",
-            "0xcccc...dddd", "0xcccc...dddd",
-            "0xeeee...ffff"
-        ],
-        "type": [
-            "transfer_in", "transfer_in", "transfer_in",
-            "transfer_in", "transfer_in",
-            "transfer_in", "transfer_in",
-            "transfer_in",
-            "transfer_in", "transfer_in",
-            "transfer_in"
+        "from_address": [
+            "0xaaa...111", "0xaaa...222", "0xaaa...333",
+            "0xbbb...111", "0xbbb...222",
+            "0xccc...111", "0xccc...222",
+            "0xddd...111",
+            "0xeee...111", "0xeee...222",
+            "0xfff...111"
         ],
         "tag": [
             "High Risk", "High Risk", "High Risk",
             "High Risk", "High Risk",
             "High Risk", "High Risk",
             "High Risk",
-            "Phishing", "Phishing",
-            "Fake"
+            "High Risk", "High Risk",
+            "High Risk"
         ],
         "tag_1": [
-            "Phishing", "Phishing", "Phishing",         # ETH
-            "Fake Native", "Fake Native",               # SCAM
-            "Fake Stablecoin", "Fake Stablecoin",       # FAKE
-            "Fake Native",                              # BUSD
-            "Phishing", "Phishing",                     # MATIC
-            "Fake Stablecoin"                           # ARBSCAM
+            "Phishing", "Phishing", "Phishing",
+            "Fake Native", "Fake Native",
+            "Fake Stablecoin", "Fake Stablecoin",
+            "Fake Native",
+            "Phishing", "Phishing",
+            "Fake Stablecoin"
         ]
     })
 
     # Create mock safe transfers
     mock_safe_transfers = pd.DataFrame({
-        "tx_hash": ["0x5678...efgh", "0x9012...ijkl", "0x3456...mnop"],
+        "tx_hash": ["0xaaa...111", "0xaaa...222", "0xaaa...333"],
         "block_timestamp": pd.to_datetime(["2023-11-27 10:15:30", "2023-11-26 08:45:22", "2023-11-25 16:30:45"]),
-        "address": ["0xuser...1234", "0xuser...1234", "0xuser...1234"],
         "blockchain": ["ethereum", "ethereum", "ethereum"],
         "contract_address": ["0xc890...1234", "0xc456...7890", "0xc123...4567"],
         "symbol": ["USDC", "WETH", "ETH"],
-        "target": ["0xabc1...2345", "0x7890...cdef", "0x1234...5678"],
-        "type": ["transfer_out", "transfer_in", "transfer_out"],
+        "from_address": ["0xaaa...111", "0xaaa...222", "0xaaa...333"],
         "tag": ["Safe", "Safe", "Safe"],
         "tag_1": ["No Detail", "No Detail", "No Detail"]
     })
@@ -851,15 +857,16 @@ def get_mock_data():
     # Combine all mock transfers for total and unique calculations
     all_transfers = pd.concat([mock_suspicious_transfers, mock_safe_transfers], ignore_index=True)
 
+
     # Calculate summary metrics dynamically
     total_transfers = len(all_transfers)
     unique_tokens = all_transfers['contract_address'].nunique()
     suspicious_count = len(mock_suspicious_transfers)
     suspicious_tokens = mock_suspicious_transfers['contract_address'].nunique()
-    suspicious_senders = mock_suspicious_transfers['address'].nunique()
+    suspicious_senders = mock_suspicious_transfers['from_address'].nunique()
     safe_count = len(mock_safe_transfers)
     safe_tokens = mock_safe_transfers['contract_address'].nunique()
-    safe_senders = mock_safe_transfers['address'].nunique()
+    safe_senders = mock_safe_transfers['from_address'].nunique()
 
     # --- Compute activity timeline for all and suspicious transfers ---
     all_transfers['date'] = pd.to_datetime(all_transfers['block_timestamp']).dt.date
@@ -910,13 +917,14 @@ def get_mock_data():
         "tokens_timeline": tokens_timeline,
         "recent_transfers": [
             (
-                lambda tag, tx_hash, contract_address, target, time: {
+                lambda tag, tx_hash, contract_address, time, from_address, to_address: {
                     "tx_hash": tx_hash,
-                    "type": "transfer_in",
                     "contract_address": contract_address,
+                    "from_address": from_address,
+                    "to_address": to_address,
                     "symbol": "ETH",
-                    "target": target,
-                    "time": time,
+                    "block_timestamp": time,
+                    "created_block_timestamp": (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d %H:%M:%S'),
                     "suspicious": tag == "High Risk",
                     "safe": tag == "Safe",
                     "tag": tag,
@@ -929,8 +937,9 @@ def get_mock_data():
                 ("High Risk" if i % 3 == 0 else ("Safe" if i % 3 == 1 else "Caution")),
                 f"0x{i}234...abcd",
                 f"0xc{i}23...4567",
-                f"0xdef{i}...5678",
-                (datetime.now() - timedelta(hours=i)).strftime('%Y-%m-%d %H:%M:%S')
+                (datetime.now() - timedelta(hours=i)).strftime('%Y-%m-%d %H:%M:%S'),
+                f"0xFrom{i:02d}...{i*7%100:02d}",
+                f"0xTo{i:02d}...{i*13%100:02d}"
             )
             for i in range(20)  # Create 20 mock transfers for testing
         ],
@@ -949,8 +958,6 @@ def get_mock_data():
             "blockchain": ["ethereum", "ethereum", "ethereum", "ethereum", "ethereum"],
             "contract_address": ["0xc123...4567", "0xc890...1234", "0xc456...7890", "0xc123...4567", "0xc789...0123"],
             "symbol": ["ETH", "USDC", "WETH", "ETH", "SCAM"],
-            "target": ["0xdef4...5678", "0xabc1...2345", "0x7890...cdef", "0x1234...5678", "0xabcd...ef12"],
-            "type": ["transfer_in", "transfer_out", "transfer_in", "transfer_out", "transfer_in"]
         })
     }
 
@@ -1055,7 +1062,7 @@ if get_cookie('has_searched') and get_cookie('current_results'):
 
     with col5:
         # Add new metric for suspicious senders
-        suspicious_senders = len(data["suspicious_transfers"]["address"].unique()) if not data["suspicious_transfers"].empty else 0
+        suspicious_senders = len(data["suspicious_transfers"]["from_address"].unique()) if not data["suspicious_transfers"].empty else 0
         st.metric(
             "High Risk Senders",
             suspicious_senders
@@ -1245,46 +1252,53 @@ if get_cookie('has_searched') and get_cookie('current_results'):
     end_idx = min(start_idx + transfers_per_page, total_transfers)
 
     # Add column headers
-    header_cols = st.columns([2, 1, 2, 1, 2, 2, 1, 1])
-    header_cols[0].write("**Tx_Hash**")
-    header_cols[1].write("**Type**")
-    header_cols[2].write("**Contract Address**")
-    header_cols[3].write("**Symbol**")
-    header_cols[4].write("**Target**")
-    header_cols[5].write("**Time**")
+    header_cols = st.columns([2, 2, 2, 2, 1.5, 1.5, 2, 1.5, 1.5])
+    header_cols[0].write("**Tx Hash**")
+    header_cols[1].write("**Contract Address**")
+    header_cols[2].write("**From Address**")
+    header_cols[3].write("**To Address**")
+    header_cols[4].write("**Symbol**")
+    header_cols[5].write("**Block Timestamp**")
     header_cols[6].write("**Status**")
     header_cols[7].write("**Detail**")
     st.divider()
 
     # Add transaction rows for current page
+    # DEBUG: Print a sample of recent_transfers before rendering
+    print("Sample data['recent_transfers'] before rendering:")
+    import pandas as pd
+    try:
+        print(pd.DataFrame(data["recent_transfers"]).head(10)[["from_address", "to_address"]])
+    except Exception as e:
+        print("DEBUG print failed:", e)
     for row in data["recent_transfers"][start_idx:end_idx]:
-        cols = st.columns([2, 1, 2, 1, 2, 2, 1, 1])
+        cols = st.columns([2, 2, 2, 2, 1.5, 1.5, 2, 1.5, 1.5])
         cols[0].write(row["tx_hash"])
-        cols[1].write(row["type"])
-        cols[2].write(row["contract_address"])
-        cols[3].write(row["symbol"])
-        cols[4].write(row["target"])
-        cols[5].write(row["time"])
-        
+        cols[1].write(row["contract_address"])
+        cols[2].write(row.get("from_address", ""))
+        cols[3].write(row.get("to_address", ""))
+        cols[4].write(row["symbol"])
+        cols[5].write(row.get("block_timestamp", ""))
         # Status badge style
         status = row.get("tag", "Caution")
         status_color = "#b71c1c" if status and status != "Caution" and not row.get("safe", False) else "#2e7d32" if row.get("safe", False) else "#FFD700"  # Changed to yellow (#FFD700)
         status_html = f"""
             <span style='background-color: {status_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
-                {status.title() if status else 'Caution'}
+                {status}
             </span>
         """
         cols[6].markdown(status_html, unsafe_allow_html=True)
-
-        # Detail badge style
+        # Detail column (e.g., tag_1)
         detail = row.get("tag_1", "No Detail")
-        detail_color = "#b71c1c" if detail in ["Phishing", "Fake Native", "Fake Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
-        detail_html = f"""
-            <span style='background-color: {detail_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
-                {detail.title() if detail else 'No Detail'}
-            </span>
-        """
-        cols[7].markdown(detail_html, unsafe_allow_html=True)
+        if detail in ["Fake Stablecoin", "Fake Native", "Phishing"]:
+            detail_html = f"""
+                <span style='background-color: #b71c1c; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
+                    {detail}
+                </span>
+            """
+            cols[7].markdown(detail_html, unsafe_allow_html=True)
+        else:
+            cols[7].write(detail)
         st.divider()
 
     # Add pagination info at the bottom
@@ -1324,7 +1338,12 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         start_idx = (current_page - 1) * tokens_per_page
         end_idx = min(start_idx + tokens_per_page, total_tokens)
 
-        # Prepare columns
+        # Display the paginated table with custom style (like Recent Transfers)
+        display_cols = ["contract_address", "name", "symbol", "created_block_timestamp", "tag", "tag_1"]
+        for col in display_cols:
+            if col not in susp.columns:
+                susp[col] = ''
+        # Table headers
         header_cols = st.columns([3, 2, 3, 2, 2, 2])
         header_cols[0].write("**Contract Address**")
         header_cols[1].write("**Name**")
@@ -1333,41 +1352,35 @@ if get_cookie('has_searched') and get_cookie('current_results'):
         header_cols[4].write("**Status**")
         header_cols[5].write("**Detail**")
         st.divider()
-
-        # Show rows for current page
-        for idx in range(start_idx, end_idx):
-            row = susp.iloc[idx]
+        # Table rows
+        for _, row in susp.iloc[start_idx:end_idx].iterrows():
             cols = st.columns([3, 2, 3, 2, 2, 2])
-            cols[0].write(row.get("contract_address", "Unknown"))
-            cols[1].write(row.get("name", ""))  # Display name, blank if null/empty
-            cols[2].write(row.get("symbol", "Unknown"))
-            cols[3].write(str(row.get("created_block_timestamp", row.get("block_timestamp", "Unknown"))))
-            
-            # Style the Status column
+            cols[0].write(row["contract_address"])
+            cols[1].write(row["name"])
+            cols[2].write(row["symbol"])
+            cols[3].write(row["created_block_timestamp"])
+            # Status badge style (red for high risk, yellow for caution, green for safe)
             status = row.get("tag", "Caution")
-            status_color = "#b71c1c" if status != "Caution" else "#FFD700"  # Changed to yellow (#FFD700)
+            status_color = "#b71c1c" if status and status.lower() not in ["caution", "safe"] else ("#2e7d32" if status.lower() == "safe" else "#FFD700")
             status_html = f"""
                 <span style='background-color: {status_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
-                    {status.title()}
+                    {status}
                 </span>
             """
             cols[4].markdown(status_html, unsafe_allow_html=True)
-            
-            # Style the Detail column
+            # Detail column
             detail = row.get("tag_1", "No Detail")
-            detail_color = "#b71c1c" if detail in ["Phishing", "Fake Native", "Fake Stablecoin"] else "#102E50"  # Red for suspicious, blue for No Detail
-            detail_html = f"""
-                <span style='background-color: {detail_color}; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
-                    {detail.title() if detail else 'No Detail'}
-                </span>
-            """
-            cols[5].markdown(detail_html, unsafe_allow_html=True)
+            if detail in ["Fake Stablecoin", "Fake Native", "Phishing"]:
+                detail_html = f"""
+                    <span style='background-color: #b71c1c; color: white; padding: 0.2em 0.7em; border-radius: 0.5em; font-size: 0.9em;'>
+                        {detail}
+                    </span>
+                """
+                cols[5].markdown(detail_html, unsafe_allow_html=True)
+            else:
+                cols[5].write(detail)
             st.divider()
 
-        # Add pagination info at the bottom
-        st.markdown(f"<div style='text-align: right; color: #666; font-size: 0.8em;'>Showing tokens {start_idx + 1}-{end_idx} of {total_tokens}</div>", unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
 else:
     # Welcome message when app loads
